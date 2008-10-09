@@ -9,7 +9,7 @@ Config::JFDI - Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over C
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =head1 SYNPOSIS 
 
@@ -52,7 +52,7 @@ is the uppercase version of what you passed to Config::JFDI->new).
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 use Moose;
 use Path::Class;
@@ -61,19 +61,49 @@ use List::MoreUtils qw/any/;
 use Hash::Merge::Simple;
 use Carp::Clan;
 use Sub::Install;
+use Data::Visitor::Callback;
 use Clone qw//;
 
 has name => qw/is ro isa Str/; # Actually, required unless ->file is given
-has path => qw/is ro isa Str/, default => "./"; # Can actually be a path (./my/, ./my) OR a bonafide file (i.e./my.yaml)
+
+has path => qw/is ro isa Str default ./; # Can actually be a path (./my/, ./my) OR a bonafide file (i.e./my.yaml)
+
 has package => qw/is ro isa Str/;
-has driver => qw/is ro required 1 lazy 1/, default => sub { {} };
-has local_suffix => qw/is ro required 1 lazy 1/, default => "local";
+
+has driver => qw/is ro lazy_build 1/;
+sub _build_driver {
+    return {};
+}
+
+has local_suffix => qw/is ro required 1 lazy 1 default local/;
+
 has no_env => qw/is ro required 1/, default => 0;
+
 has env_lookup => qw/is ro/, default => sub { [] };
+
 has load_once => qw/is ro required 1/, default => 1;
 
 has loaded => qw/is ro required 1/, default => 0;
-has _config => qw/is ro required 1 lazy 1/, default => sub { {} };
+
+has substitution => qw/reader _substitution lazy_build 1 isa HashRef/;
+sub _build_substitution {
+    return {};
+}
+
+has default => qw/is ro lazy_build 1 isa HashRef/;
+sub _build_default {
+    return {};
+}
+
+has path_to => qw/reader _path_to lazy_build 1 isa Str/;
+sub _build_path_to {
+    my $self = shift;
+    return $self->config->{home} if $self->config->{home};
+    return $self->{path} if -d $self->{path};
+    return '.';
+}
+
+has _config => qw/is rw isa HashRef/;
 
 # TODO Maybe in the... future-ure-ure-ure...
 #has driver_name => qw/is ro isa Str/;
@@ -102,6 +132,7 @@ You can configure the $config object by passing the following to new:
                         the extension. Setting this will override path
 
     local_suffix        The suffix to match when looking for a local configuration. "local" By default
+                        ("config_local_suffix" will also work so as to be drop-in compatible with C::P::CL)
 
     env_lookup          Additional ENV to check if $ENV{<NAME>...} is not found
 
@@ -114,6 +145,15 @@ You can configure the $config object by passing the following to new:
                         You can also specify the package name directly by setting install_accessor to it 
                         (e.g. install_accessor => "My::Application")
 
+    substitute          A hash consisting of subroutines called during the substitution phase of configuration
+                        preparation. ("substitutions" will also work so as to be drop-in compatible with C::P::CL)
+                        A substitution subroutine has the following signature: ($config, [ $argument1, $argument2, ... ])
+
+    path_to             The path to dir to use for the __path_to(...)__ substitution. If nothing is given, then the 'home'
+                        config value will be used ($config->get->{home}). Failing that, the current directory will be used.
+
+    default             A hash filled with default keys/values
+
 Returns a new Config::JFDI object
 
 =cut
@@ -123,7 +163,7 @@ sub BUILD {
     my $given = shift;
 
     if ($given->{file}) {
-        warn "Warning, overriding path setting with file (\"$given->{file}\" instead of \"$given->{path}\")" if $given->{path};
+        carp "Warning, overriding path setting with file (\"$given->{file}\" instead of \"$given->{path}\")" if $given->{path};
         $self->{path} = $given->{file};
     }
     elsif (my $name = $given->{name}) {
@@ -142,6 +182,17 @@ sub BUILD {
 
     if (defined $self->env_lookup) {
         $self->{env_lookup} = [ $self->env_lookup ] unless ref $self->env_lookup eq "ARRAY";
+    }
+
+    if ($given->{config_local_suffix}) {
+        $self->{local_suffix} = $given->{config_local_suffix};
+    }
+
+    for (qw/substitute substitutes substitutions substitution/) {
+        if ($given->{$_}) {
+            $self->{substitution} = $given->{$_};
+            last;
+        }
     }
 
     if (my $package = $given->{install_accessor}) {
@@ -171,43 +222,65 @@ These will only load the configuration once, so it's safe to call them multiple 
 
 sub get {
     my $self = shift;
+
     my $config = $self->config;
     return $config;
-    # TODO Expand to allow dotted key access
+    # TODO Expand to allow dotted key access (?)
 }
 
 sub config {
     my $self = shift;
+
     return $self->_config if $self->loaded;
     return $self->load;
 }
 
 sub load {
     my $self = shift;
+
     if ($self->loaded && $self->load_once) {
         return $self->get;
     }
-    $self->{_config} = {};
-    my @files = $self->_find_files;
-    my $cfg = $self->_load_files(\@files);
 
-    my (@cfg, @local_cfg);
+    $self->_config($self->default);
+
     {
-        # Anything that is local takes precedence
-        my $local_suffix = $self->_get_local_suffix;
-        for (@$cfg) {
-            if ((keys %$_)[0] =~ m{$local_suffix\.}xms) {
-                push @local_cfg, $_;
-            }
-            else {
-                push @cfg, $_;
+        my @files = $self->_find_files;
+        my $cfg_files = $self->_load_files(\@files);
+        my %cfg_files = map { (%$_)[0] => $_ } reverse @$cfg_files;
+
+        my (@cfg, @local_cfg);
+        {
+            # Anything that is local takes precedence
+            my $local_suffix = $self->_get_local_suffix;
+            for (sort keys %cfg_files) {
+
+                my $cfg = $cfg_files{$_};
+
+                if (m{$local_suffix\.}ms) {
+                    push @local_cfg, $cfg;
+                }
+                else {
+                    push @cfg, $cfg;
+                }
             }
         }
+
+        $self->_load($_) for @cfg, @local_cfg;
     }
 
-    $self->_load($_) for @cfg, @local_cfg;
-
     $self->{loaded} = 1;
+
+    {
+        my $visitor = Data::Visitor::Callback->new(
+            plain_value => sub {
+                return unless defined $_;
+                $self->substitute($_);
+            }
+        );
+        $visitor->visit($self->config);
+
+    }
 
     return $self->config;
 }
@@ -239,6 +312,59 @@ sub reload {
     return $self->load;
 }
 
+=head2 $config->substitute( <value>, <value>, ... )
+
+For each given <value>, if <value> looks like a substitution specification, then run
+the substitution macro on <value> and store the result.
+
+There are three default substitutions (the same as L<Catalyst::Plugin::ConfigLoader>)
+
+=over 4
+
+=item * C<__HOME__> - replaced with C<$c-E<gt>path_to('')>
+
+=item * C<__path_to(foo/bar)__> - replaced with C<$c-E<gt>path_to('foo/bar')>
+
+=item * C<__literal(__FOO__)__> - leaves __FOO__ alone (allows you to use
+C<__DATA__> as a config value, for example)
+
+=back
+
+The parameter list is split on comma (C<,>).
+
+You can define your own substitutions by supplying the substitute option to ->new
+
+=cut
+
+sub substitute {
+    my $self = shift;
+
+    my $substitution = $self->_substitution;
+    $substitution->{ HOME }    ||= sub { shift->path_to( '' ); };
+    $substitution->{ path_to } ||= sub { shift->path_to( @_ ); };
+    $substitution->{ literal } ||= sub { return $_[ 1 ]; };
+    my $matcher = join( '|', keys %$substitution );
+
+    for ( @_ ) {
+        s{__($matcher)(?:\((.+?)\))?__}{ $substitution->{ $1 }->( $self, $2 ? split( /,/, $2 ) : () ) }eg;
+    }
+}
+
+sub path_to {
+    my $self = shift;
+    my @path = @_;
+
+    my $path_to = $self->_path_to;
+
+    my $path = Path::Class::Dir->new( $path_to, @path );
+    if ( -d $path ) {
+        return $path;
+    }
+    else {
+        return Path::Class::File->new( $path_to, @path );
+    }
+}
+
 sub _load {
     my $self = shift;
     my $cfg = shift;
@@ -267,8 +393,6 @@ sub _find_files {
     
     my @files;
     if ($extension) {
-        # TODO Make sure DBIC can handle ->create({}) case ("INSERT INTO xyzzy () VALUES ()")
-        # FIXME C::P::ConfigLoader does a next here!
         croak "Can't handle file extension $extension" unless any { $_ eq $extension } @extensions;
         (my $local_path = $path) =~ s{\.$extension$}{_$local_suffix.$extension};
         push @files, $path, $local_path;
@@ -334,8 +458,6 @@ sub _get_extensions {
     return @{ Config::Any->extensions }
 }
 
-=head1 SYNOPSIS
-
 =head1 AUTHOR
 
 Robert Krimen, C<< <rkrimen at cpan.org> >>
@@ -343,6 +465,14 @@ Robert Krimen, C<< <rkrimen at cpan.org> >>
 =head1 SEE ALSO
 
 L<Catalyst::Plugin::ConfigLoader>, L<Config::Any>, L<Catalyst>
+
+=head1 SOURCE
+
+You can contribute or fork this project via GitHub:
+
+L<http://github.com/robertkrimen/config-jfdi/tree/master>
+
+    git clone git://github.com/robertkrimen/config-jfdi.git PACKAGE
 
 =head1 BUGS
 

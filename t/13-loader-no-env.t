@@ -1,3 +1,6 @@
+use strict;
+use warnings;
+
 use Test::More;
 plan qw/no_plan/;
 
@@ -14,4 +17,4 @@ is($config->get->{'Model::Baz'}->{qux},            'xyzzy');
 is($config->get->{'Model::Baz'}->{another},        'new key');
 is($config->get->{'view'},                         'View::TT::New');
 is($config->get->{'foo_sub'},                      '__foo(x,y)__' );
-is($config->get->{'literal_macro'},                '__literal(__DATA__)__');
+is($config->get->{'literal_macro'},                '__DATA__');

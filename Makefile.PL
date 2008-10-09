@@ -3,16 +3,44 @@ use inc::Module::Install;
 name 'Config-JFDI';
 all_from 'lib/Config/JFDI.pm';
 
-build_requires 'Test::More';
+resources repository => 'http://github.com/robertkrimen/config-jfdi/tree/master';
 
-requires 'Hash::Merge::Simple';
-requires 'Config::Any';
-requires 'Carp::Clan';
-requires 'Clone';
-requires 'List::MoreUtils';
-requires 'Moose';
-requires 'Path::Class';
-requires 'Sub::Install';
+{
+    require ExtUtils::MakeMaker;
+    use strict;
+    no strict 'refs';
+
+    my $libscan = \&{"ExtUtils::MM_Any::libscan"};
+    *{"ExtUtils::MM_Any::libscan"} = sub {
+        return '' unless $libscan->(@_);
+        return '' if $_[1] =~ /\.sw[p-z]$/;
+        return $_[1];
+    };
+}
+
+{
+    map { my ($pk, $vr) = split m/\s/; build_requires $pk => $vr || 0 } grep { ! /^\s*#/ } split m/\n/, <<_END_;
+Test::More
+Test::Most
+_END_
+
+    map { my ($pk, $vr) = split m/\s/; requires $pk => $vr || 0 } grep { ! /^\s*#/ } split m/\n/, <<_END_;
+Hash::Merge::Simple
+Config::Any
+Carp::Clan
+Clone
+List::MoreUtils
+Moose
+Path::Class
+Sub::Install
+Data::Visitor
+_END_
+}
+
+if (-e 'inc/.author') {
+    my $all_from = join '/', 'lib', split m/-/, name . '.pm';
+    `perldoc -tF $all_from > README` if ! -e 'README' || (stat $all_from)[9] > (stat 'README')[9];
+}
 
 auto_install;
 
