@@ -25,15 +25,15 @@ Test::Most
 _END_
 
     map { my ($pk, $vr) = split m/\s/; requires $pk => $vr || 0 } grep { ! /^\s*#/ } split m/\n/, <<_END_;
-Hash::Merge::Simple
 Config::Any
 Carp::Clan
 Clone
+Data::Visitor 0.24
+Hash::Merge::Simple
 List::MoreUtils
 Moose
 Path::Class
 Sub::Install
-Data::Visitor
 _END_
 }
 
@@ -42,7 +42,4 @@ if (-e 'inc/.author') {
     `perldoc -tF $all_from > README` if ! -e 'README' || (stat $all_from)[9] > (stat 'README')[9];
 }
 
-auto_install;
-
 WriteAll;
-

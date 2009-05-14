@@ -4,13 +4,12 @@ META.yml # Will be created by "make dist"
 Makefile.PL
 README
 lib/Config/JFDI.pm
-inc/Module/AutoInstall.pm
+lib/Config/JFDI/Carp.pm
+lib/Config/JFDI/Source/Loader.pm
 inc/Module/Install.pm
-inc/Module/Install/AutoInstall.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
 inc/Module/Install/Fetch.pm
-inc/Module/Install/Include.pm
 inc/Module/Install/Makefile.pm
 inc/Module/Install/Metadata.pm
 inc/Module/Install/Win32.pm
@@ -23,10 +22,11 @@ t/13-loader-no-env.t
 t/14-loader-env-lookup.t
 t/15-install-accessor.t
 t/16-loader-order.t
+t/17-found.t
+t/18-open.t
 t/20-substitute.t
 t/21-path-to.t
 t/22-default.t
-t/assets/.default.pl.swp
 t/assets/default.pl
 t/assets/order/xyzzy.cnf
 t/assets/order/xyzzy.conf
@@ -45,4 +45,3 @@ t/assets/xyzzy_local.pl
 t/release/boilerplate.t
 t/release/pod-coverage.t
 t/release/pod.t
-

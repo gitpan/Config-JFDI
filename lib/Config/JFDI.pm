@@ -9,11 +9,11 @@ Config::JFDI - Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over C
 
 =head1 VERSION
 
-Version 0.05
+Version 0.05_1
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.05_1';
 
 =head1 SYNPOSIS 
 
@@ -52,36 +52,52 @@ precedence over any other existing configuration file, if any. The precedence ta
 Finally, you can override/modify the path search from outside your application, by setting the <NAME>_CONFIG variable outside your application (where <NAME>
 is the uppercase version of what you passed to Config::JFDI->new).
 
+=head1 Behavior change of the 'file' parameter in 0.06
+
+In previous versions, Config::JFDI would treat the file parameter as a path parameter, stripping off the extension (ignoring it) and globbing what remained against all the extensions that Config::Any could provide. That is, it would do this:
+
+    Config::JFDI->new( file => 'xyzzy.cnf' );
+    # Transform 'xyzzy.cnf' into 'xyzzy.pl', 'xyzzy.yaml', 'xyzzy_local.pl', ... (depending on what Config::Any could parse)
+
+This is probably not what people intended. Config::JFDI will now squeak a warning if you pass 'file' through, but you can suppress the warning with 'no_06_warning' or 'quiet_deprecation'
+
+    Config::JFDI->new( file => 'xyzzy.cnf', no_06_warning => 1 );
+    Config::JFDI->new( file => 'xyzzy.cnf', quiet_deprecation => 1 ); # More general
+
+If you *do* want the original behavior, simply pass in the file parameter as the path parameter instead:
+
+    Config::JFDI->new( path => 'xyzzy.cnf' ); # Will work as before
+
 =head1 METHODS
 
 =cut
 
 use Moose;
+
+use Config::JFDI::Source::Loader;
+use Config::JFDI::Carp;
+
 use Path::Class;
 use Config::Any;
-use List::MoreUtils qw/any/;
 use Hash::Merge::Simple;
-use Carp::Clan;
 use Sub::Install;
 use Data::Visitor::Callback;
 use Clone qw//;
 
-has name => qw/is ro isa Str/; # Actually, required unless ->file is given
-
-has path => qw/is ro isa Str default ./; # Can actually be a path (./my/, ./my) OR a bonafide file (i.e./my.yaml)
-
 has package => qw/is ro isa Str/;
 
-has driver => qw/is ro lazy_build 1/;
-sub _build_driver {
-    return {};
-}
+has source => qw/is ro/, handles => [qw/ driver local_suffix no_env env_lookup path found /];
 
-has local_suffix => qw/is ro required 1 lazy 1 default local/;
+#has driver => qw/is ro lazy_build 1/;
+#sub _build_driver {
+#    return {};
+#}
 
-has no_env => qw/is ro required 1/, default => 0;
+#has local_suffix => qw/is ro required 1 lazy 1 default local/;
 
-has env_lookup => qw/is ro/, default => sub { [] };
+#has no_env => qw/is ro required 1/, default => 0;
+
+#has env_lookup => qw/is ro/, default => sub { [] };
 
 has load_once => qw/is ro required 1/, default => 1;
 
@@ -107,18 +123,7 @@ sub _build_path_to {
 
 has _config => qw/is rw isa HashRef/;
 
-# TODO Maybe in the... future-ure-ure-ure...
-#has driver_name => qw/is ro isa Str/;
-#has driver_class => qw/is ro isa Str/;
-
-sub _env(@) {
-    my $name = uc join "_", @_;
-    $name =~ s/::/_/g;
-    $name =~ s/\W/_/g;
-    return $ENV{$name};
-}
-
-=head2 my $config = Config::JFDI->new(...)
+=head2 $config = Config::JFDI->new(...)
 
 You can configure the $config object by passing the following to new:
 
@@ -133,12 +138,14 @@ You can configure the $config object by passing the following to new:
     file                Directly read the configuration from this file. Config::Any must recognize
                         the extension. Setting this will override path
 
+    no_local            Disable lookup of a local configuration. The 'local_suffix' option will be ignored. Off by default
+
     local_suffix        The suffix to match when looking for a local configuration. "local" By default
                         ("config_local_suffix" will also work so as to be drop-in compatible with C::P::CL)
 
-    env_lookup          Additional ENV to check if $ENV{<NAME>...} is not found
+    no_env              Set this to 1 to disregard anything in the ENV. The 'env_lookup' option will be ignored. Off by default
 
-    no_env              Set this to 1 to disregard anything in the ENV. Off by default
+    env_lookup          Additional ENV to check if $ENV{<NAME>...} is not found
 
     driver              A hash consisting of Config:: driver information. This is passed directly through
                         to Config::Any
@@ -164,31 +171,41 @@ sub BUILD {
     my $self = shift;
     my $given = shift;
 
+    $self->{package} = $given->{name} if defined $given->{name} && ! defined $self->{package} && ! ref $given->{name};
+
+    my ($source, %source);
     if ($given->{file}) {
+        carp "The behavior of the 'file' option has changed, pass in 'quiet_deprecation' or 'no_06_warning' to disable this warning"
+            unless $given->{quiet_deprecation} || $given->{no_06_warning};
         carp "Warning, overriding path setting with file (\"$given->{file}\" instead of \"$given->{path}\")" if $given->{path};
-        $self->{path} = $given->{file};
-    }
-    elsif (my $name = $given->{name}) {
-        if (ref $name eq "SCALAR") {
-            $self->{name} = $$name;
-        }
-        else {
-            $self->{package} = $name;
-            $name =~ s/::/_/g;
-            $self->{name} = lc $name;
-        }
-    }
-    else {
-        croak "At minimum, either a name or a file is required";
+        $given->{path} = $given->{file};
+        $source{path_is_file} = 1;
     }
 
-    if (defined $self->env_lookup) {
-        $self->{env_lookup} = [ $self->env_lookup ] unless ref $self->env_lookup eq "ARRAY";
+    {
+        for (qw/
+            name
+            path
+            driver
+
+            no_local
+            local_suffix
+
+            no_env
+            env_lookup
+
+        /) {
+            $source{$_} = $given->{$_} if exists $given->{$_};
+        }
+
+        carp "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead" if exists $source{local_suffix};
+
+        $source{local_suffix} = $given->{config_local_suffix} if $given->{config_local_suffix};
+
+        $source = Config::JFDI::Source::Loader->new( %source );
     }
 
-    if ($given->{config_local_suffix}) {
-        $self->{local_suffix} = $given->{config_local_suffix};
-    }
+    $self->{source} = $source;
 
     for (qw/substitute substitutes substitutions substitution/) {
         if ($given->{$_}) {
@@ -210,17 +227,50 @@ sub BUILD {
     }
 }
 
+=head2 $config_hash = Config::JFDI->open( ... )
+
+As an alternative way to load a config, ->open will pass given arguments to ->new( ... ), then attempt to do ->load
+
+Unlike ->get or ->load, if no configuration files are found, ->open will return undef (or the empty list)
+
+This is so you can do something like:
+
+    my $config_hash = Config::JFDI->open( "/path/to/application.cnf" ) or croak "Couldn't find config file!"
+
+In scalar context, ->open will return the config hash, NOT the config object. If you want the config object, call ->open in list context:
+
+    my ($config_hash, $config) = Config::JFDI->open( ... )
+
+You can pass any arguments to ->open that you would to ->new
+
 =head2 $config->get
 
 =head2 $config->config
 
 =head2 $config->load
 
-Load a config as specified by ->new(...) and ENV and return a hash
+Load a config as specified by ->new( ... ) and ENV and return a hash
 
 These will only load the configuration once, so it's safe to call them multiple times without incurring any loading-time penalty
 
+=head2 $config->found
+
+Returns a list of files found
+
+If the list is empty, then no files were loaded/read
+
 =cut
+
+sub open {
+    if ( ! ref $_[0] ) {
+        my $class = shift;
+        return $class->new( no_06_warning => 1, 1 == @_ ? (file => $_[0]) : @_ )->open;
+    }
+    my $self = shift;
+    carp "You called ->open on an instantiated object with arguments" if @_;
+    return unless $self->found;
+    return wantarray ? ($self->get, $self) : $self->get;
+}
 
 sub get {
     my $self = shift;
@@ -247,28 +297,9 @@ sub load {
     $self->_config($self->default);
 
     {
-        my @files = $self->_find_files;
-        my $cfg_files = $self->_load_files(\@files);
-        my %cfg_files = map { (%$_)[0] => $_ } reverse @$cfg_files;
+        my @read = $self->source->read;
 
-        my (@cfg, @local_cfg);
-        {
-            # Anything that is local takes precedence
-            my $local_suffix = $self->_get_local_suffix;
-            for (sort keys %cfg_files) {
-
-                my $cfg = $cfg_files{$_};
-
-                if (m{$local_suffix\.}ms) {
-                    push @local_cfg, $cfg;
-                }
-                else {
-                    push @cfg, $cfg;
-                }
-            }
-        }
-
-        $self->_load($_) for @cfg, @local_cfg;
+        $self->_load($_) for @read;
     }
 
     $self->{loaded} = 1;
@@ -280,7 +311,7 @@ sub load {
                 $self->substitute($_);
             }
         );
-        $visitor->visit($self->config);
+        $visitor->visit( $self->config );
 
     }
 
@@ -376,90 +407,6 @@ sub _load {
     $self->{_config} = Hash::Merge::Simple->merge($self->_config, $hash);
 }
 
-sub _load_files {
-    my $self = shift;
-    my $files = shift;
-    return Config::Any->load_files({
-        files => $files,
-        use_ext => 1,
-        driver_args => $self->driver,
-    });
-}
-
-sub _find_files {
-    my $self = shift;
-
-    my ($path, $extension) = $self->_get_path;
-    my $local_suffix = $self->_get_local_suffix;
-    my @extensions = $self->_get_extensions;
-    
-    my @files;
-    if ($extension) {
-        croak "Can't handle file extension $extension" unless any { $_ eq $extension } @extensions;
-        (my $local_path = $path) =~ s{\.$extension$}{_$local_suffix.$extension};
-        push @files, $path, $local_path;
-    }
-    else {
-        @files = map { ( "$path.$_", "${path}_${local_suffix}.$_" ) } @extensions;
-    }
-
-    return @files;
-}
-
-sub _env_lookup {
-    my $self = shift;
-    my @suffix = @_;
-
-    my $name = $self->name;
-    my $env_lookup = $self->env_lookup;
-    my @lookup;
-    push @lookup, $name if $name;
-    push @lookup, @$env_lookup;
-
-    for my $prefix (@lookup) {
-        my $value = _env($prefix, @suffix);
-        return $value if defined $value;
-    }
-    
-    return;
-}
-
-sub _get_path {
-    my $self = shift;
-
-    my $name = $self->name;
-    my $path;
-#    $path = _env($name, 'CONFIG') if $name && ! $self->no_env;
-    $path = $self->_env_lookup('CONFIG') unless $self->no_env;
-    $path ||= $self->path;
-
-    # TODO Uhh, what if path is -d? 
-    my ($extension) = ($path =~ m{\.(.{1,4})$});
-
-    if (-d $path) {
-        $path =~ s{[\/\\]$}{}; # Remove any trailing slash, e.g. apple/ or apple\ => apple
-        $path .= "/$name"; # Look for a file in path with $self->name, e.g. apple => apple/name
-    }
-
-    return ($path, $extension);
-}
-
-sub _get_local_suffix {
-    my $self = shift;
-
-    my $name = $self->name;
-    my $suffix;
-    $suffix = $self->_env_lookup('CONFIG_LOCAL_SUFFIX') unless $self->no_env;
-#    $suffix = _env($self->name, 'CONFIG_LOCAL_SUFFIX') if $name && ! $self->no_env;
-    $suffix ||= $self->local_suffix;
-
-    return $suffix;
-}
-
-sub _get_extensions {
-    return @{ Config::Any->extensions }
-}
-
 =head1 AUTHOR
 
 Robert Krimen, C<< <rkrimen at cpan.org> >>
@@ -529,65 +476,3 @@ under the same terms as Perl itself.
 =cut
 
 1; # End of Config::JFDI
-
-__END__
-
-sub get_config_path {
-    my $c = shift;
-
-    # deprecation notice
-    if ( exists $c->config->{ file } ) {
-        $c->log->warn(
-            q(*** "file" config parameter has been deprecated in favor of "$c->config->{ 'Plugin::ConfigLoader' }->{ file }")
-        );
-        sleep( 3 );
-    }
-
-    my $appname = ref $c || $c;
-    my $prefix  = Catalyst::Utils::appprefix( $appname );
-    my $path    = Catalyst::Utils::env_value( $c, 'CONFIG' )
-        || $c->config->{ 'Plugin::ConfigLoader' }->{ file }
-        || $c->config->{ file }    # to be removed next release
-        || $c->path_to( $prefix );
-
-    my ( $extension ) = ( $path =~ m{\.(.{1,4})$} );
-
-    if ( -d $path ) {
-        $path =~ s{[\/\\]$}{};
-        $path .= "/$prefix";
-    }
-
-    return ( $path, $extension );
-
-sub setup {
-    my $c     = shift;
-    my @files = $c->find_files;
-    my $cfg   = Config::Any->load_files(
-        {   files       => \@files,
-            filter      => \&_fix_syntax,
-            use_ext     => 1,
-            driver_args => $c->config->{ 'Plugin::ConfigLoader' }->{ driver }
-                || {},
-        }
-    );
-
-    # split the responses into normal and local cfg
-    my $local_suffix = $c->get_config_local_suffix;
-    my ( @cfg, @localcfg );
-    for ( @$cfg ) {
-        if ( ( keys %$_ )[ 0 ] =~ m{ $local_suffix \. }xms ) {
-            push @localcfg, $_;
-        }
-        else {
-            push @cfg, $_;
-        }
-    }
-
-    # load all the normal cfgs, then the local cfgs last so they can override
-    # normal cfgs
-    $c->load_config( $_ ) for @cfg, @localcfg;
-
-    $c->finalize_config;
-    $c->NEXT::setup( @_ );
-}
-

@@ -3,10 +3,13 @@ abstract: 'Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over Confi
 author:
   - 'Robert Krimen, C<< <rkrimen at cpan.org> >>'
 build_requires:
+  ExtUtils::MakeMaker: 6.42
   Test::More: 0
   Test::Most: 0
+configure_requires:
+  ExtUtils::MakeMaker: 6.42
 distribution_type: module
-generated_by: 'Module::Install version 0.79'
+generated_by: 'Module::Install version 0.87'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -20,7 +23,7 @@ requires:
   Carp::Clan: 0
   Clone: 0
   Config::Any: 0
-  Data::Visitor: 0
+  Data::Visitor: 0.24
   Hash::Merge::Simple: 0
   List::MoreUtils: 0
   Moose: 0
@@ -29,4 +32,4 @@ requires:
 resources:
   license: http://dev.perl.org/licenses/
   repository: http://github.com/robertkrimen/config-jfdi/tree/master
-version: 0.05
+version: 0.05_1
