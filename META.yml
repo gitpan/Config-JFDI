@@ -33,4 +33,4 @@ requires:
 resources:
   license: http://dev.perl.org/licenses/
   repository: http://github.com/robertkrimen/config-jfdi/tree/master
-version: 0.05_2
+version: 0.06
