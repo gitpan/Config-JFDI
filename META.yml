@@ -19,6 +19,7 @@ no_index:
   directory:
     - inc
     - t
+    - xt
 requires:
   Carp::Clan::Share: 0
   Clone: 0
@@ -33,4 +34,4 @@ requires:
 resources:
   license: http://dev.perl.org/licenses/
   repository: http://github.com/robertkrimen/config-jfdi/tree/master
-version: 0.06
+version: 0.061
