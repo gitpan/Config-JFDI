@@ -1,6 +1,6 @@
 package Config::JFDI;
 BEGIN {
-  $Config::JFDI::VERSION = '0.0064_1';
+  $Config::JFDI::VERSION = '0.0064_2';
 }
 # ABSTRACT: Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over Config::Any
 
@@ -8,7 +8,7 @@ use warnings;
 use strict;
 
 
-use Moose;
+use Any::Moose;
 
 use Config::JFDI::Source::Loader;
 use Config::JFDI::Carp;
@@ -20,36 +20,25 @@ use Sub::Install;
 use Data::Visitor::Callback;
 use Clone qw//;
 
-has package => qw/is ro isa Str/;
+has package => qw/ is ro isa Str /;
 
-has source => qw/is ro/, handles => [qw/ driver local_suffix no_env env_lookup path found /];
+has source => qw/ is ro /, handles => [qw/ driver local_suffix no_env env_lookup path found /];
 
-#has driver => qw/is ro lazy_build 1/;
-#sub _build_driver {
-#    return {};
-#}
+has load_once => qw/ is ro required 1 /, default => 1;
 
-#has local_suffix => qw/is ro required 1 lazy 1 default local/;
+has loaded => qw/ is ro required 1 /, default => 0;
 
-#has no_env => qw/is ro required 1/, default => 0;
-
-#has env_lookup => qw/is ro/, default => sub { [] };
-
-has load_once => qw/is ro required 1/, default => 1;
-
-has loaded => qw/is ro required 1/, default => 0;
-
-has substitution => qw/reader _substitution lazy_build 1 isa HashRef/;
+has substitution => qw/ reader _substitution lazy_build 1 isa HashRef /;
 sub _build_substitution {
     return {};
 }
 
-has default => qw/is ro lazy_build 1 isa HashRef/;
+has default => qw/ is ro lazy_build 1 isa HashRef /;
 sub _build_default {
     return {};
 }
 
-has path_to => qw/reader _path_to lazy_build 1 isa Str/;
+has path_to => qw/ reader _path_to lazy_build 1 isa Str /;
 sub _build_path_to {
     my $self = shift;
     return $self->config->{home} if $self->config->{home};
@@ -57,7 +46,7 @@ sub _build_path_to {
     return '.';
 }
 
-has _config => qw/is rw isa HashRef/;
+has _config => qw/ is rw isa HashRef /;
 
 
 sub BUILD {
@@ -246,7 +235,7 @@ Config::JFDI - Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over C
 
 =head1 VERSION
 
-version 0.0064_1
+version 0.0064_2
 
 =head1 DESCRIPTION
 

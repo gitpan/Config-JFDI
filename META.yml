@@ -14,6 +14,7 @@ meta-spec:
   version: 1.4
 name: Config-JFDI
 requires:
+  Any::Moose: 0
   Carp::Clan::Share: 0
   Clone: 0
   Config::Any: 0
@@ -22,8 +23,6 @@ requires:
   Getopt::Usaginator: 0
   Hash::Merge::Simple: 0
   List::MoreUtils: 0
-  Moose: 0
-  MooseX::AttributeHelpers: 0
   Path::Class: 0
   Sub::Install: 0
-version: 0.0064_1
+version: 0.0064_2

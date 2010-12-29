@@ -22,6 +22,7 @@ my %WriteMakefileArgs = (
   'LICENSE' => 'perl',
   'NAME' => 'Config::JFDI',
   'PREREQ_PM' => {
+    'Any::Moose' => '0',
     'Carp::Clan::Share' => '0',
     'Clone' => '0',
     'Config::Any' => '0',
@@ -30,12 +31,10 @@ my %WriteMakefileArgs = (
     'Getopt::Usaginator' => '0',
     'Hash::Merge::Simple' => '0',
     'List::MoreUtils' => '0',
-    'Moose' => '0',
-    'MooseX::AttributeHelpers' => '0',
     'Path::Class' => '0',
     'Sub::Install' => '0'
   },
-  'VERSION' => '0.0064_1',
+  'VERSION' => '0.0064_2',
   'test' => {
     'TESTS' => 't/*.t'
   }
