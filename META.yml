@@ -1,37 +1,29 @@
 ---
 abstract: 'Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over Config::Any'
 author:
-  - 'Robert Krimen, C<< <rkrimen at cpan.org> >>'
+  - 'Robert Krimen <robertkrimen@gmail.com>'
 build_requires:
-  ExtUtils::MakeMaker: 6.42
-  Test::More: 0
   Test::Most: 0
 configure_requires:
-  ExtUtils::MakeMaker: 6.42
-distribution_type: module
-generated_by: 'Module::Install version 0.91'
+  ExtUtils::MakeMaker: 6.31
+dynamic_config: 0
+generated_by: 'Dist::Zilla version 4.102345, CPAN::Meta::Converter version 2.102400'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
   version: 1.4
 name: Config-JFDI
-no_index:
-  directory:
-    - inc
-    - t
-    - xt
 requires:
   Carp::Clan::Share: 0
   Clone: 0
   Config::Any: 0
+  Config::General: 0
   Data::Visitor: 0.24
+  Getopt::Usaginator: 0
   Hash::Merge::Simple: 0
   List::MoreUtils: 0
   Moose: 0
   MooseX::AttributeHelpers: 0
   Path::Class: 0
   Sub::Install: 0
-resources:
-  license: http://dev.perl.org/licenses/
-  repository: http://github.com/robertkrimen/config-jfdi/tree/master
-version: 0.064
+version: 0.0064_1

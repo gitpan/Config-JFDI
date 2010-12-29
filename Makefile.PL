@@ -1,50 +1,64 @@
-use inc::Module::Install;
 
-name 'Config-JFDI';
-all_from 'lib/Config/JFDI.pm';
+use strict;
+use warnings;
 
-resources repository => 'http://github.com/robertkrimen/config-jfdi/tree/master';
 
-{
-    require ExtUtils::MakeMaker;
-    use strict;
-    no strict 'refs';
 
-    my $libscan = \&{"ExtUtils::MM_Any::libscan"};
-    *{"ExtUtils::MM_Any::libscan"} = sub {
-        return '' unless $libscan->(@_);
-        return '' if $_[1] =~ /\.sw[p-z]$/;
-        return $_[1];
-    };
+use ExtUtils::MakeMaker 6.31;
+
+
+
+my %WriteMakefileArgs = (
+  'ABSTRACT' => 'Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over Config::Any',
+  'AUTHOR' => 'Robert Krimen <robertkrimen@gmail.com>',
+  'BUILD_REQUIRES' => {
+    'Test::Most' => '0'
+  },
+  'CONFIGURE_REQUIRES' => {
+    'ExtUtils::MakeMaker' => '6.31'
+  },
+  'DISTNAME' => 'Config-JFDI',
+  'EXE_FILES' => [],
+  'LICENSE' => 'perl',
+  'NAME' => 'Config::JFDI',
+  'PREREQ_PM' => {
+    'Carp::Clan::Share' => '0',
+    'Clone' => '0',
+    'Config::Any' => '0',
+    'Config::General' => '0',
+    'Data::Visitor' => '0.24',
+    'Getopt::Usaginator' => '0',
+    'Hash::Merge::Simple' => '0',
+    'List::MoreUtils' => '0',
+    'Moose' => '0',
+    'MooseX::AttributeHelpers' => '0',
+    'Path::Class' => '0',
+    'Sub::Install' => '0'
+  },
+  'VERSION' => '0.0064_1',
+  'test' => {
+    'TESTS' => 't/*.t'
+  }
+);
+
+
+unless ( eval { ExtUtils::MakeMaker->VERSION(6.56) } ) {
+  my $br = delete $WriteMakefileArgs{BUILD_REQUIRES};
+  my $pp = $WriteMakefileArgs{PREREQ_PM};
+  for my $mod ( keys %$br ) {
+    if ( exists $pp->{$mod} ) {
+      $pp->{$mod} = $br->{$mod} if $br->{$mod} > $pp->{$mod};
+    }
+    else {
+      $pp->{$mod} = $br->{$mod};
+    }
+  }
 }
 
-{
-    map { my ($pk, $vr) = split m/\s/; build_requires $pk => $vr || 0 } grep { ! /^\s*#/ } split m/\n/, <<_END_;
-Test::More
-Test::Most
-_END_
+delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
+  unless eval { ExtUtils::MakeMaker->VERSION(6.52) };
 
-    map { my ($pk, $vr) = split m/\s/; requires $pk => $vr || 0 } grep { ! /^\s*#/ } split m/\n/, <<_END_;
-Carp::Clan::Share
-Config::Any
-Clone
-Data::Visitor 0.24
-Hash::Merge::Simple
-List::MoreUtils
-Moose
-MooseX::AttributeHelpers
-Path::Class
-Sub::Install
-_END_
-}
+WriteMakefile(%WriteMakefileArgs);
 
-if (-e 'inc/.author') {
-    my $all_from = join '/', 'lib', split m/-/, name . '.pm';
-    `perldoc -tF $all_from > README` if ! -e 'README' || (stat $all_from)[9] > (stat 'README')[9];
-}
 
-tests_recursive 't';
 
-auto_install;
-
-WriteAll;
