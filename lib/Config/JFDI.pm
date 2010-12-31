@@ -1,6 +1,6 @@
 package Config::JFDI;
 BEGIN {
-  $Config::JFDI::VERSION = '0.0064_2';
+  $Config::JFDI::VERSION = '0.0065';
 }
 # ABSTRACT: Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over Config::Any
 
@@ -235,7 +235,7 @@ Config::JFDI - Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over C
 
 =head1 VERSION
 
-version 0.0064_2
+version 0.0065
 
 =head1 DESCRIPTION
 
