@@ -1,6 +1,6 @@
 package Config::JFDI;
 BEGIN {
-  $Config::JFDI::VERSION = '0.0065';
+  $Config::JFDI::VERSION = '0.065';
 }
 # ABSTRACT: Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over Config::Any
 
@@ -235,7 +235,7 @@ Config::JFDI - Just * Do it: A Catalyst::Plugin::ConfigLoader-style layer over C
 
 =head1 VERSION
 
-version 0.0065
+version 0.065
 
 =head1 DESCRIPTION
 
@@ -434,7 +434,7 @@ Robert Krimen <robertkrimen@gmail.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2010 by Robert Krimen.
+This software is copyright (c) 2011 by Robert Krimen.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

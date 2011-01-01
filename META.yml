@@ -25,4 +25,4 @@ requires:
   List::MoreUtils: 0
   Path::Class: 0
   Sub::Install: 0
-version: 0.0065
+version: 0.065
